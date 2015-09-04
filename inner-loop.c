@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
+#include <time.h>
 
 typedef int32_t v4si32 __attribute__ ((vector_size (16)));
 
@@ -12,10 +13,11 @@ typedef struct {
 	int32_t z;
 } v3;
 
-#define ISTEPS 10
-#define DEBUG 1
+#define ISTEPS 1 //7 seems to be the maximal number which is still unrolled with -funroll-loops using GCC.
+#define DEBUG 0
 
 // NOTE: hpstart, hrayn, hp0, hp1 must have space for at least (n+4) items!
+// NOTE: the 4 elements at the end of the array in hpstart and hrayn must be initialized like this to prevent scan_line from looping infinitely: hpstart[i].x = 0;hrayn[i].x = -1; TODO: somehow incorporate this in scan_line. (But without removing the const from hpstart and hrayn.)
 // NOTE: hw and hh must be powers of 2 (so that "& offset_mask" works)
 int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2, const int hh_log2, const int hd, const int32_t* hm, v3* hp0, v3* hp1, const int debug) {
 	/*
@@ -38,7 +40,7 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 	v4si32 index={-1,-1,-1,-1};
 	int todo = 0;
 	v4si32 ign;
-	void next_todo(int i) {
+	void inline next_todo(int i) {
 		index[i] = todo;
 		ign[i] = 0;
 		hraynx[i] = hrayn[todo].x;
@@ -130,20 +132,19 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 }
 
 int main(void) {
-	int32_t hw=32<<16;
-	int32_t hh=16<<16;
+	int32_t hw=512<<16;
+	int32_t hh=512<<16;
 	int32_t hd=48<<16;
 	int32_t* hm = malloc(sizeof(int32_t)*(hw>>16)*(hh>>16));
 
 	srandom(1);
 	for (int i=0;i<(hw>>16)*(hh>>16);i++) {
 		hm[i] = random() % hd;
-//		hm[i] = 0;
 	}
 
 	int n=5000;
-	v3 hpstart[n+4];
-	v3 hrayn[n+4];
+	v3 *hpstart = malloc(sizeof(v3) * (n+4));
+	v3 *hrayn = malloc(sizeof(v3) * (n+4));
 	for (int i=0;i<n;i++) {
 		hpstart[i].x = random() % hw;
 		hpstart[i].y = random() % hh;
@@ -151,24 +152,28 @@ int main(void) {
 		hrayn[i].x = (random() % (1<<16)) * ((random()%2)==0?1:-1);
 		hrayn[i].y = (random() % (1<<16)) * ((random()%2)==0?1:-1);
 		hrayn[i].z = (random() % (1<<16)) * ((random()%2)==0?1:-1);
-		switch(random()%6) {
+		switch(random()%4) {
 			case 0: hrayn[i].x = 1<<16; break;
 			case 1: hrayn[i].y = 1<<16; break;
-			case 2: hrayn[i].z = 1<<16; break;
-			case 3: hrayn[i].x = -(1<<16); break;
-			case 4: hrayn[i].y = -(1<<16); break;
-			case 5: hrayn[i].z = -(1<<16); break;
+			case 2: hrayn[i].x = -(1<<16); break;
+			case 3: hrayn[i].y = -(1<<16); break;
 		}
+	}
+	// TODO: somehow incorporate this in scan_line. prevent scan_line from looping infinitely.
+	for (int i=n;i<n+4;i++) {
+		hpstart[n].x = 0;
+		hrayn[n].x = -1;
 	}
 
 	if (DEBUG) {
 		printf("hw:%i hw>>16:%i hh:%i hh>>16:%i hd:%i n:%i\n",hw,hw>>16,hh,hh>>16,hd,n);
 	}
 	
-	v3 hp0[n+4];
-	v3 hp1[n+4];
-	int steps[n+4];
+	v3 *hp0 = malloc(sizeof(v3) * (n+4));
+	v3 *hp1 = malloc(sizeof(v3) * (n+4));
+	clock_t scan_line_start = clock();
 	scan_line(n, hpstart, hrayn, (int)log2(hw>>16), (int)log2(hh>>16), hd, hm, hp0, hp1, DEBUG?-1:-1);
+	clock_t scan_line_stop = clock();
 
 	if (DEBUG) {
 		for (int i=0;i<n;i++) {
@@ -183,13 +188,17 @@ int main(void) {
 		}
 	}
 
+	printf("a:");
 	int a=0;
 	for (int i=0;i<n;i++) {
 		a += hp0[i].x + hp0[i].y + hp0[i].z;
 		a += hp1[i].x + hp1[i].y + hp1[i].z;
 	}
-	
-	printf("a:%i\n",a);
+	printf("%i\n",a);
+
+	float scan_line_time = ((float)scan_line_stop-scan_line_start)/CLOCKS_PER_SEC;
+	float pixels_per_second = (float)n/scan_line_time;
+	printf("scan_line time: %f pixels per second: %i size of square rendered at 25fps: %i\n", scan_line_time, (int)pixels_per_second, (int)sqrt(pixels_per_second/25));
 
 	return 0;
 }
