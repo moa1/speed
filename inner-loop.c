@@ -26,17 +26,29 @@ typedef struct {
 #define HM_METHOD HM_FUNCTION
 //#define HM_METHOD HM_ARRAY
 #define GETNEXT_IF 1
-#define GETNEXT_PMAX 2
+#define GETNEXT_MAX 2
 #define GETNEXT GETNEXT_IF
+//#define GETNEXT GETNEXT_MAX
+#define HORIZONTAL_MAX_C 1 // use generic C implementation of horizontal maximum. (even seems to be faster than HORIZONTAL_MAX_PMAX.)
+#define HORIZONTAL_MAX_PMAX 2 // compute horizontal maximum using sse, uses gcc-specific builtins.
+#define HORIZONTAL_MAX HORIZONTAL_MAX_C
+//#define HORIZONTAL_MAX HORIZONTAL_MAX_PMAX
 #define SCAN_LINE_LOOP 200 //number of times scan_line is called to test speed.
 
-v4hi horizontal_max(v4hi h0) {
+int16_t horizontal_max(v4hi h0) {
+#if HORIZONTAL_MAX==HORIZONTAL_MAX_PMAX
 	// horizontal maximum of index
 	v4hi h1 = __builtin_shuffle(h0, (v4hi){1,0,3,2});
 	v4hi h2 = __builtin_ia32_pmaxsw(h1, h0);
 	v4hi h3 = __builtin_shuffle(h2, (v4hi){2,2,0,0});
 	v4hi h4 = __builtin_ia32_pmaxsw(h2, h3);
-	return h4;
+	int16_t m = h4[0];
+#elif HORIZONTAL_MAX==HORIZONTAL_MAX_C
+	int16_t m01 = (h0[0]>h0[1])?h0[0]:h0[1];
+	int16_t m23 = (h0[2]>h0[3])?h0[2]:h0[3];
+	int16_t m = (m01>m23)?m01:m23;
+#endif
+	return m;
 }
 
 // NOTE: hpstart, hrayn, hp0, hp1 must have space for at least (n+4) items!
@@ -187,7 +199,7 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 				}
 			}
 		}
-#elif GETNEXT==GETNEXT_PMAX
+#elif GETNEXT==GETNEXT_MAX
 		v4si hraynx1;
 		v4si hrayny1;
 		v4si hraynz1;
@@ -210,8 +222,8 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 			hp1[done].z = hp1z[i];
 			
 			// get new task
-			v4hi h4 = horizontal_max(index);
-			index[i] = ((h4[i]+1) & ign[i]) | (index[i] & ~ign[i]);
+			int16_t max_index = horizontal_max(index);
+			index[i] = ((max_index+1) & ign[i]) | (index[i] & ~ign[i]);
 			
 			int16_t ni = index[i];
 			hraynx1[i] = hrayn[ni].x;
@@ -233,15 +245,15 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 		for (int i=0;i<4;i++) {
 			if (DEBUG) {
 				if (index[i] >= debug_min && index[i] <= debug_max) {
-					printf("new index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign);
+					printf("new index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign[i]);
 				}
 			}
 		}
 		
 		// compute todo
 		//printf("index:(%i,%i,%i,%i)\n",index[0],index[1],index[2],index[3]);
-		v4hi h4 = horizontal_max(index);
-		todo = h4[0] + 1;
+		int16_t max_index = horizontal_max(index);
+		todo = max_index + 1;
 #endif
 		if (DEBUG) {
 			int print=0;
