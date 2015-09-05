@@ -14,21 +14,35 @@ typedef struct {
 	int32_t z;
 } v3;
 
-#define ISTEPS 1 //7 seems to be the maximal number which is still unrolled with -funroll-loops using GCC.
+#define ISTEPS 1 //7 seems to be the maximal number which is still unrolled with -funroll-loops using gcc.
 #define DEBUG 0
-#define HM_FUNCTION 1
-#define HM_ARRAY 2
-#define HM_CONSTANT 3
-#define HM_METHOD HM_FUNCTION //HM_FUNCTION means call function "hm_function", HM_ARRAY means look up in "hm_function_arg", HM_CONSTANT uses 0 as the height at all positions.
+#define NEXT_TODO_LOCAL 1 //for some reason gcc is faster with this option; else it doesn't generate sse instructions for the next_todo().
+#define NEXT_TODO_MACRO 2 //clang doesn't support inline functions.
+#define NEXT_TODO NEXT_TODO_LOCAL
+//#define NEXT_TODO NEXT_TODO_MACRO
+#define HM_FUNCTION 1 //HM_FUNCTION means call function "hm_function"
+#define HM_ARRAY 2 //HM_ARRAY means look up in "hm_function_arg"
+#define HM_CONSTANT 3 //HM_CONSTANT uses 0 as the height at all positions.
+#define HM_METHOD HM_FUNCTION
+//#define HM_METHOD HM_ARRAY
 #define GETNEXT_IF 1
 #define GETNEXT_PMAX 2
 #define GETNEXT GETNEXT_IF
-#define SCAN_LINE_LOOP 10 //number of times scan_line is called to test speed.
+#define SCAN_LINE_LOOP 200 //number of times scan_line is called to test speed.
+
+v4hi horizontal_max(v4hi h0) {
+	// horizontal maximum of index
+	v4hi h1 = __builtin_shuffle(h0, (v4hi){1,0,3,2});
+	v4hi h2 = __builtin_ia32_pmaxsw(h1, h0);
+	v4hi h3 = __builtin_shuffle(h2, (v4hi){2,2,0,0});
+	v4hi h4 = __builtin_ia32_pmaxsw(h2, h3);
+	return h4;
+}
 
 // NOTE: hpstart, hrayn, hp0, hp1 must have space for at least (n+4) items!
 // NOTE: the 4 elements at the end of the array in hpstart and hrayn must be initialized like this to prevent scan_line from looping infinitely: hpstart[i] = (v3){0,0,0};hrayn[i] = (v3){0,0,0}; TODO: somehow incorporate this in scan_line. (But without removing the const from hpstart and hrayn.)
 // NOTE: hw and hh must be powers of 2 (so that "& offset_mask" works)
-int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2, const int hh_log2, const int hd, const v4si hm_function(const v4si x, const v4si y, void* arg), void* hm_function_arg, v3* hp0, v3* hp1, const int debug_min, const int debug_max) {
+void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2, const int hh_log2, const int hd, const v4si hm_function(const v4si x, const v4si y, void* arg), void* hm_function_arg, v3* hp0, v3* hp1, const int debug_min, const int debug_max) {
 	/*
 	  1. Set ign := 0
 	  2. Repeat:
@@ -50,6 +64,7 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 	int16_t todo = 0;
 	v4si ign;
 
+#if NEXT_TODO==NEXT_TODO_LOCAL
 	void inline next_todo(int i) {
 		index[i] = todo;
 		ign[i] = 0;
@@ -61,16 +76,33 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 		hp1z[i] = hpstart[todo].z;
 		todo++;
 	}
+#elif NEXT_TODO==NEXT_TODO_MACRO
+#define next_todo(i)							\
+	index[i] = todo;							\
+	ign[i] = 0;									\
+	hraynx[i] = hrayn[todo].x;					\
+	hrayny[i] = hrayn[todo].y;					\
+	hraynz[i] = hrayn[todo].z;					\
+	hp1x[i] = hpstart[todo].x;					\
+	hp1y[i] = hpstart[todo].y;					\
+	hp1z[i] = hpstart[todo].z;					\
+	todo++;
+#endif
 
 	for (int i=0;i<4;i++) {
 		next_todo(i); // no bounds check necessary because hpstart,hrayn have space for n+4 items.
 	}
-	const int32_t hwmax=(hw<<16)-1;
-	const int32_t hhmax=(hh<<16)-1;
-	const int32_t hdmax=hd-1;
+	const int32_t hwmax_i=(hw<<16)-1;
+	v4si hwmax = {hwmax_i,hwmax_i,hwmax_i,hwmax_i};
+	const int32_t hhmax_i=(hh<<16)-1;
+	v4si hhmax = {hhmax_i,hhmax_i,hhmax_i,hhmax_i};
+	const int32_t hdmax_i=hd-1;
+	v4si hdmax = {hdmax_i,hdmax_i,hdmax_i,hdmax_i};
 #if HM_METHOD==HM_ARRAY
-	const int32_t stride_shift=hw_log2;
-	const int32_t offset_mask=(hh<<stride_shift)-1;
+	const int32_t stride_shift_i=hw_log2;
+	const v4si stride_shift={hw_log2,hw_log2,hw_log2,hw_log2};
+	const int32_t offset_mask_i=(hh<<stride_shift_i)-1;
+	const v4si offset_mask={offset_mask_i,offset_mask_i,offset_mask_i,offset_mask_i};
 	const int32_t* hm = hm_function_arg;
 #endif
 	do {
@@ -94,18 +126,18 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 				for (int i=0;i<4;i++) {
 					if (index[i] >= debug_min && index[i] <= debug_max) {
 						printf("hp2[%i]:(%x,%x,%x) ign[%i]:%i\n",i,hp2x[i],hp2y[i],hp2z[i],i,ign[i]);
-						printf("hwmax:%x hhmax:%x hdmax:%x\n",hwmax,hhmax,hdmax);
+						printf("hwmax:%x hhmax:%x hdmax:%x\n",hwmax_i,hhmax_i,hdmax_i);
 					}
 				}
 			}
 			v4si outside = {0,0,0,0};
-			outside |= (hp1x < 0) | (hp1x > hwmax);
-			outside |= (hp1y < 0) | (hp1y > hhmax);
+			outside |= (hp1x < (v4si){0,0,0,0}) | (hp1x > hwmax);
+			outside |= (hp1y < (v4si){0,0,0,0}) | (hp1y > hhmax);
 			outside |= (hp1z > hdmax);
 #if HM_METHOD==HM_FUNCTION
 			v4si h = (*hm_function)(hp1x, hp1y, hm_function_arg);
 #elif HM_METHOD==HM_ARRAY
-			v4si offset = (((hp1y >> 16) << stride_shift) + (hp1x >> 16)) & offset_mask;
+			v4si offset = (((hp1y >> (v4si){16,16,16,16}) << stride_shift) + (hp1x >> (v4si){16,16,16,16})) & offset_mask;
 			v4si h = {hm[offset[0]],hm[offset[1]],hm[offset[2]],hm[offset[3]]};
 #elif HM_METHOD==HM_CONSTANT
 			v4si h = {0,0,0,0};
@@ -150,7 +182,7 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 		for (int i=0;i<4;i++) {
 			if (DEBUG) {
 				if (index[i] >= debug_min && index[i] <= debug_max) {
-					printf("new index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign);
+					printf("new index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign[i]);
 					//printf("new hp1[%i]:(%i,%i,%i)\n",i,hp1x[i],hp1y[i],hp1z[i]);
 				}
 			}
@@ -178,12 +210,8 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 			hp1[done].z = hp1z[i];
 			
 			// get new task
-			// horizontal maximum of index
-			v4hi h1 = __builtin_shuffle(index, (v4hi){1,0,3,2});
-			v4hi h2 = __builtin_ia32_pmaxsw(h1, index);
-			v4hi h3 = __builtin_shuffle(h2, (v4hi){2,2,0,0});
-			v4hi h4 = __builtin_ia32_pmaxsw(h2, h3) + 1;
-			index[i] = (h4[i] & ign[i]) | (index[i] & ~ign[i]);
+			v4hi h4 = horizontal_max(index);
+			index[i] = ((h4[i]+1) & ign[i]) | (index[i] & ~ign[i]);
 			
 			int16_t ni = index[i];
 			hraynx1[i] = hrayn[ni].x;
@@ -212,10 +240,7 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 		
 		// compute todo
 		//printf("index:(%i,%i,%i,%i)\n",index[0],index[1],index[2],index[3]);
-		v4hi h1 = __builtin_shuffle(index, (v4hi){1,0,3,2});
-		v4hi h2 = __builtin_ia32_pmaxsw(h1, index);
-		v4hi h3 = __builtin_shuffle(h2, (v4hi){2,2,0,0});
-		v4hi h4 = __builtin_ia32_pmaxsw(h2, h3);
+		v4hi h4 = horizontal_max(index);
 		todo = h4[0] + 1;
 #endif
 		if (DEBUG) {
@@ -233,16 +258,16 @@ int scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2
 
 typedef struct {
 	int32_t* hm;
-	int32_t stride_shift;
-	int32_t offset_mask;
+	v4si stride_shift;
+	v4si offset_mask;
 } hm_info;
 
-const v4si get_hm_height(const v4si x, const v4si y, void* arg) {
+const v4si __attribute__((noinline)) get_hm_height(const v4si x, const v4si y, void* arg) {
 	hm_info* hm_info = arg;
 	int32_t* hm = hm_info->hm;
-	const int32_t offset_mask = hm_info->offset_mask;
-	const int32_t stride_shift = hm_info->stride_shift;
-	v4si offset = (((y >> 16) << stride_shift) + (x >> 16)) & offset_mask;
+	const v4si offset_mask = hm_info->offset_mask;
+	const v4si stride_shift = hm_info->stride_shift;
+	v4si offset = (((y >> (v4si){16,16,16,16}) << stride_shift) + (x >> (v4si){16,16,16,16})) & offset_mask;
 	v4si h = {hm[offset[0]],hm[offset[1]],hm[offset[2]],hm[offset[3]]};
 	return h;
 
@@ -264,8 +289,10 @@ int main(void) {
 		hm[i] = random() % hd;
 		//hm[i] = 0;
 	}
-	const int32_t stride_shift=log2(hw>>16);
-	const int32_t offset_mask=((hh>>16)<<stride_shift)-1;
+	const int32_t stride_shift_i=log2(hw>>16);
+	const v4si stride_shift={stride_shift_i,stride_shift_i,stride_shift_i,stride_shift_i};
+	const int32_t offset_mask_i=((hh>>16)<<stride_shift_i)-1;
+	const v4si offset_mask={offset_mask_i,offset_mask_i,offset_mask_i,offset_mask_i};
 	hm_info hm_info = {hm, stride_shift, offset_mask};
 
 	int n=20000;
@@ -312,12 +339,16 @@ int main(void) {
 #else
 	void* hm_function_arg = NULL;
 #endif
-	clock_t scan_line_start = clock();
+	clock_t scan_line_diff = -1;
 	for (int i=0;i<SCAN_LINE_LOOP;i++) {
+		clock_t scan_line_start = clock();
 		scan_line(n, hpstart, hrayn, (int)log2(hw>>16), (int)log2(hh>>16), hd, get_hm_height, hm_function_arg, hp0, hp1, -1,-1);
+		__asm__("emms\n");
+		clock_t scan_line_stop = clock();
+		clock_t diff = scan_line_stop - scan_line_start;
+		if (scan_line_diff<0 || diff < scan_line_diff)
+			scan_line_diff = diff;
 	}
-	clock_t scan_line_stop = clock();
-	__asm__("emms\n");
 	
 	if (DEBUG) {
 		for (int i=0;i<n;i++) {
@@ -340,8 +371,8 @@ int main(void) {
 	}
 	printf("%i\n",a);
 
-	float scan_line_time = ((float)scan_line_stop-scan_line_start)/CLOCKS_PER_SEC;
-	float pixels_per_second = (float)n*SCAN_LINE_LOOP/scan_line_time;
+	float scan_line_time = ((float)scan_line_diff)/CLOCKS_PER_SEC;
+	float pixels_per_second = (float)n/scan_line_time;
 	printf("scan_line time: %f size of square rendered at 25fps: %i pixels per second: %i\n", scan_line_time, (int)sqrt(pixels_per_second/25), (int)pixels_per_second);
 
 	return 0;
