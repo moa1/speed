@@ -1,9 +1,5 @@
-ifndef CC
-	CC=gcc
-endif
-ifndef CFLAGS
-	CFLAGS=-march=native
-endif
+# the shitty make doesn't allow me to specify a default CC: CC ?= gcc and running make executes "cc" instead of "gcc".
+CFLAGS ?= -march=native
 
 clean:
 	rm -f *.o vec mmx-asm inner-loop
