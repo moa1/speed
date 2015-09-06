@@ -54,7 +54,7 @@ int16_t horizontal_max(v4hi h0) {
 }
 
 // NOTE: hpstart, hrayn, hp0, hp1 must have space for at least (n+4) items!
-// NOTE: the 4 elements at the end of the array in hpstart and hrayn must be initialized like this to prevent scan_line from looping infinitely: hpstart[i] = (v3){0,0,0};hrayn[i] = (v3){0,0,0}; TODO: somehow incorporate this in scan_line. (But without removing the const from hpstart and hrayn.)
+// NOTE: the 4 elements at the end of the array in hpstart and hrayn must be initialized like this to prevent scan_line from looping infinitely: hpstart[i] = (v3){x,y,z}; hrayn[i] = (v3){0,0,0}; where {x,y,z} is a point above the heightmap surface. TODO: somehow incorporate this in scan_line. (But without removing the const from hpstart and hrayn.)
 // NOTE: hw and hh must be powers of 2 (so that "& offset_mask" works)
 void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log2, const int hh_log2, const int hd, const v4si hm_function(const v4si x, const v4si y, void* arg), void* hm_function_arg, v3* hp0, v3* hp1, const int debug_min, const int debug_max) {
 	/*
@@ -463,7 +463,8 @@ int main(int argc, char** argv) {
 	void* hm_function_arg = NULL;
 #endif
 	clock_t scan_line_diff = -1;
-	for (int i=0;i<scan_line_loop;i++) {
+	int steps = 0;
+	for (int scan=0;scan<scan_line_loop;scan++) {
 		clock_t scan_line_start = clock();
 		scan_line(n, hpstart, hrayn, (int)log2(hw>>16), (int)log2(hh>>16), hd, get_hm_height, hm_function_arg, hp0, hp1, -1,-1);
 		__asm__("emms\n");
@@ -471,6 +472,25 @@ int main(int argc, char** argv) {
 		clock_t diff = scan_line_stop - scan_line_start;
 		if (scan_line_diff<0 || diff < scan_line_diff)
 			scan_line_diff = diff;
+
+		if (scan==0) {
+			for (int i=0; i<n; i++) {
+				int diff;
+				int hraynxy;
+				if (hrayn[i].x == 1<<16 || hrayn[i].x == -1<<16) {
+					diff = (hp0[i].x - hpstart[i].x);
+					hraynxy = hrayn[i].x;
+				} else if (hrayn[i].y == 1<<16 || hrayn[i].y == -1<<16) {
+					diff = (hp0[i].y - hpstart[i].y);
+					hraynxy = hrayn[i].y;
+				} else {
+					assert(0);
+				}
+				assert((diff % (1<<16)) == 0);
+				int isteps = diff / hraynxy;
+				steps += isteps;
+			}
+		}
 	}
 	
 	if (DEBUG) {
@@ -494,9 +514,13 @@ int main(int argc, char** argv) {
 	}
 	printf("%i\n",a);
 
+	printf("n: %i\n",n);
+	printf("steps: %i\n",steps);
 	float scan_line_time = ((float)scan_line_diff)/CLOCKS_PER_SEC;
 	float pixels_per_second = (float)n/scan_line_time;
-	printf("scan_line time: %f size of square rendered at 25fps: %i pixels per second: %i\n", scan_line_time, (int)sqrt(pixels_per_second/25), (int)pixels_per_second);
+	printf("scan_line time: %f\n", scan_line_time);
+	printf("size of square rendered at 25fps: %i\n", (int)sqrt(pixels_per_second/25));
+	printf("pixels per second: %i\n", (int)pixels_per_second);
 
 	return 0;
 }
