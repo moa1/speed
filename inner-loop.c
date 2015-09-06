@@ -25,15 +25,17 @@ typedef struct {
 #define HM_CONSTANT 3 //HM_CONSTANT uses 0 as the height at all positions.
 #define HM_METHOD HM_FUNCTION
 //#define HM_METHOD HM_ARRAY
+//#define HM_METHOD HM_CONSTANT
 #define GETNEXT_IF 1
 #define GETNEXT_MAX 2
-#define GETNEXT GETNEXT_IF
+#define GETNEXT_SWITCH 3
+//#define GETNEXT GETNEXT_IF
 //#define GETNEXT GETNEXT_MAX
+#define GETNEXT GETNEXT_SWITCH
 #define HORIZONTAL_MAX_C 1 // use generic C implementation of horizontal maximum. (even seems to be faster than HORIZONTAL_MAX_PMAX.)
 #define HORIZONTAL_MAX_PMAX 2 // compute horizontal maximum using sse, uses gcc-specific builtins.
 #define HORIZONTAL_MAX HORIZONTAL_MAX_C
 //#define HORIZONTAL_MAX HORIZONTAL_MAX_PMAX
-#define SCAN_LINE_LOOP 200 //number of times scan_line is called to test speed.
 
 int16_t horizontal_max(v4hi h0) {
 #if HORIZONTAL_MAX==HORIZONTAL_MAX_PMAX
@@ -88,6 +90,14 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 		hp1z[i] = hpstart[todo].z;
 		todo++;
 	}
+	void inline store_result(const int done, const int i) {
+		hp0[done].x = hp1x[i] - hraynx[i];
+		hp0[done].y = hp1y[i] - hrayny[i];
+		hp0[done].z = hp1z[i] - hraynz[i];
+		hp1[done].x = hp1x[i];
+		hp1[done].y = hp1y[i];
+		hp1[done].z = hp1z[i];
+	}
 #elif NEXT_TODO==NEXT_TODO_MACRO
 #define next_todo(i)							\
 	index[i] = todo;							\
@@ -99,6 +109,13 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 	hp1y[i] = hpstart[todo].y;					\
 	hp1z[i] = hpstart[todo].z;					\
 	todo++;
+#define store_result(done,i)					\
+	hp0[done].x = hp1x[i] - hraynx[i];			\
+	hp0[done].y = hp1y[i] - hrayny[i];			\
+	hp0[done].z = hp1z[i] - hraynz[i];			\
+	hp1[done].x = hp1x[i];						\
+	hp1[done].y = hp1y[i];						\
+	hp1[done].z = hp1z[i];
 #else
 #error "unknown NEXT_TODO"
 #endif
@@ -175,32 +192,23 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 				}
 			}
 		}
-#if GETNEXT==GETNEXT_IF
-		for (int i=0;i<4;i++) {
-			if (DEBUG) {
+
+		if (DEBUG) {
+			for (int i=0;i<4;i++) {
 				if (index[i] >= debug_min && index[i] <= debug_max) {
 					printf("index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign[i]);
 				}
 			}
+		}
+
+#if GETNEXT==GETNEXT_IF
+		for (int i=0;i<4;i++) {
 			if (ign[i]) {
 				int done=index[i];
 				// store result
-				hp0[done].x = hp1x[i] - hraynx[i];
-				hp0[done].y = hp1y[i] - hrayny[i];
-				hp0[done].z = hp1z[i] - hraynz[i];
-				hp1[done].x = hp1x[i];
-				hp1[done].y = hp1y[i];
-				hp1[done].z = hp1z[i];
+				store_result(done, i);
 				// get new
 				next_todo(i);
-			}
-		}
-		for (int i=0;i<4;i++) {
-			if (DEBUG) {
-				if (index[i] >= debug_min && index[i] <= debug_max) {
-					printf("new index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign[i]);
-					//printf("new hp1[%i]:(%i,%i,%i)\n",i,hp1x[i],hp1y[i],hp1z[i]);
-				}
 			}
 		}
 #elif GETNEXT==GETNEXT_MAX
@@ -211,19 +219,9 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 		v4si hp1y1;
 		v4si hp1z1;
 		for (int i=0;i<4;i++) {
-			if (DEBUG) {
-				if (index[i] >= debug_min && index[i] <= debug_max) {
-					printf("index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign[i]);
-				}
-			}
 			// store result
 			int done=index[i];
-			hp0[done].x = hp1x[i] - hraynx[i];
-			hp0[done].y = hp1y[i] - hrayny[i];
-			hp0[done].z = hp1z[i] - hraynz[i];
-			hp1[done].x = hp1x[i];
-			hp1[done].y = hp1y[i];
-			hp1[done].z = hp1z[i];
+			store_result(done,i);
 			
 			// get new task
 			int16_t max_index = horizontal_max(index);
@@ -246,22 +244,124 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 		hp1z = (hp1z1 & ign) | (hp1z & ~ign);
 		ign = (v4si){0,0,0,0};
 
-		for (int i=0;i<4;i++) {
-			if (DEBUG) {
-				if (index[i] >= debug_min && index[i] <= debug_max) {
-					printf("new index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign[i]);
-				}
-			}
-		}
-		
 		// compute todo
-		//printf("index:(%i,%i,%i,%i)\n",index[0],index[1],index[2],index[3]);
 		int16_t max_index = horizontal_max(index);
 		todo = max_index + 1;
+#elif GETNEXT==GETNEXT_SWITCH
+		int igns = ((ign[3] & 1) << 3) | ((ign[2] & 1) << 2) | ((ign[1] & 1) << 1) | (ign[0] & 1);
+		int done;
+		switch(igns) {
+			case 0: // 0 == 0b0
+				break;
+			case 1: // 1 == 0b1
+				store_result(index[0], 0);
+				next_todo(0);
+				break;
+			case 2: // 2 == 0b10
+				store_result(index[1], 1);
+				next_todo(1);
+				break;
+			case 3: // 3 == 0b11
+				store_result(index[0], 0);
+				next_todo(0);
+				store_result(index[1], 1);
+				next_todo(1);
+				break;
+			case 4: // 4 == 0b100
+				store_result(index[2], 2);
+				next_todo(2);
+				break;
+			case 5: // 5 == 0b101
+				store_result(index[0], 0);
+				next_todo(0);
+				store_result(index[2], 2);
+				next_todo(2);
+				break;
+			case 6: // 6 == 0b110
+				store_result(index[1], 1);
+				next_todo(1);
+				store_result(index[2], 2);
+				next_todo(2);
+				break;
+			case 7: // 7 == 0b111
+				store_result(index[0], 0);
+				next_todo(0);
+				store_result(index[1], 1);
+				next_todo(1);
+				store_result(index[2], 2);
+				next_todo(2);
+				break;
+			case 8: // 8 == 0b1000
+				store_result(index[3], 3);
+				next_todo(3);
+				break;
+			case 9: // 9 == 0b1001
+				store_result(index[0], 0);
+				next_todo(0);
+				store_result(index[3], 3);
+				next_todo(3);
+				break;
+			case 10: // 10 == 0b1010
+				store_result(index[1], 1);
+				next_todo(1);
+				store_result(index[3], 3);
+				next_todo(3);
+				break;
+			case 11: // 11 == 0b1011
+				store_result(index[0], 0);
+				next_todo(0);
+				store_result(index[1], 1);
+				next_todo(1);
+				store_result(index[3], 3);
+				next_todo(3);
+				break;
+			case 12: // 12 == 0b1100
+				store_result(index[2], 2);
+				next_todo(2);
+				store_result(index[3], 3);
+				next_todo(3);
+				break;
+			case 13: // 13 == 0b1101
+				store_result(index[0], 0);
+				next_todo(0);
+				store_result(index[2], 2);
+				next_todo(2);
+				store_result(index[3], 3);
+				next_todo(3);
+				break;
+			case 14: // 14 == 0b1110
+				store_result(index[1], 1);
+				next_todo(1);
+				store_result(index[2], 2);
+				next_todo(2);
+				store_result(index[3], 3);
+				next_todo(3);
+				break;
+			case 15: // 15 == 0b1111
+				store_result(index[0], 0);
+				next_todo(0);
+				store_result(index[1], 1);
+				next_todo(1);
+				store_result(index[2], 2);
+				next_todo(2);
+				store_result(index[3], 3);
+				next_todo(3);
+				break;
+			default:
+				perror("invalid igns");
+				exit(1);
+				break;
+		}
 #else
 #error "unknown GETNEXT"
 #endif
 		if (DEBUG) {
+			for (int i=0;i<4;i++) {
+				if (index[i] >= debug_min && index[i] <= debug_max) {
+					printf("new index[%i]:%i ign[%i]:%i\n",i,index[i],i,ign[i]);
+				}
+			}
+
 			int print=0;
 			for (int i=0;i<4;i++) {
 				if (index[i] >= debug_min && index[i] <= debug_max)
@@ -292,7 +392,12 @@ const v4si __attribute__((noinline)) get_hm_height(const v4si x, const v4si y, v
 //	return (v4si){0,0,0,0};
 }
 
-int main(void) {
+int main(int argc, char** argv) {
+	int scan_line_loop = 200; //number of times scan_line is called to test speed.
+	if (argc > 1) {
+		scan_line_loop = atoi(argv[1]);
+	}
+
 	int32_t hw=512<<16;
 	int32_t hh=512<<16;
 	int32_t hd=48<<16;
@@ -358,7 +463,7 @@ int main(void) {
 	void* hm_function_arg = NULL;
 #endif
 	clock_t scan_line_diff = -1;
-	for (int i=0;i<SCAN_LINE_LOOP;i++) {
+	for (int i=0;i<scan_line_loop;i++) {
 		clock_t scan_line_start = clock();
 		scan_line(n, hpstart, hrayn, (int)log2(hw>>16), (int)log2(hh>>16), hd, get_hm_height, hm_function_arg, hp0, hp1, -1,-1);
 		__asm__("emms\n");
