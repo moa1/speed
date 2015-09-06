@@ -99,6 +99,8 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 	hp1y[i] = hpstart[todo].y;					\
 	hp1z[i] = hpstart[todo].z;					\
 	todo++;
+#else
+#error "unknown NEXT_TODO"
 #endif
 
 	for (int i=0;i<4;i++) {
@@ -153,6 +155,8 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 			v4si h = {hm[offset[0]],hm[offset[1]],hm[offset[2]],hm[offset[3]]};
 #elif HM_METHOD==HM_CONSTANT
 			v4si h = {0,0,0,0};
+#else
+#error "unknown HM_METHOD"
 #endif
 			if (DEBUG) {
 				for (int i=0;i<4;i++) {
@@ -254,6 +258,8 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 		//printf("index:(%i,%i,%i,%i)\n",index[0],index[1],index[2],index[3]);
 		int16_t max_index = horizontal_max(index);
 		todo = max_index + 1;
+#else
+#error "unknown GETNEXT"
 #endif
 		if (DEBUG) {
 			int print=0;
