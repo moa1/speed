@@ -39,18 +39,22 @@ void mmx_using_asm(void) {
 void sse_using_asm(void) {
 //	int i0[4]={ 1001002003,2001002003,501002003,251002003};
 //	int i1[4]={-1001002003,2091002003,500000000,251002003};
-	int i0[4]={randint(),randint(),randint(),randint()};
-	int i1[4]={randint(),randint(),randint(),randint()};
+//	int i0[4]={randint(),randint(),randint(),randint()};
+//	int i1[4]={randint(),randint(),randint(),randint()};
+	float i0[4]={(float)randint(),(float)randint(),(float)randint(),(float)randint()};
+	float i1[4]={(float)randint(),(float)randint(),(float)randint(),(float)randint()};
 	
 	for (int i=0; i<4; i++) {
-		printf("i0[%i]:%i\ti1[%i]:%i\n", i, i0[i], i, i1[i]);
+		//printf("i0[%i]:%i\ti1[%i]:%i\n", i, i0[i], i, i1[i]);
+		printf("i0[%i]:%f\ti1[%i]:%f\n", i, i0[i], i, i1[i]);
 	}
 
 	printf("----\n");
 	__asm__(
 		"movq %0,%%xmm0\n"
 		"movq %1,%%xmm1\n"
-		"pmaxsw %%xmm0, %%xmm1\n"
+		//"pmaxsw %%xmm0, %%xmm1\n"
+		"divps %%xmm0, %%xmm1\n" //TODO: this needs r,r/m as arguments, not m,m. I have to look up what I should write below instead of "m"/"=m".
 		"movq %%xmm0,%0\n"
 		"movq %%xmm1,%1\n"
 		: "=m"(i0), "=m"(i1)
@@ -59,7 +63,8 @@ void sse_using_asm(void) {
 	);
 
 	for (int i=0; i<4; i++) {
-		printf("i0[%i]:%i\ti1[%i]:%i\n", i, i0[i], i, i1[i]);
+		//printf("i0[%i]:%i\ti1[%i]:%i\n", i, i0[i], i, i1[i]);
+		printf("i0[%i]:%f\ti1[%i]:%f\n", i, i0[i], i, i1[i]);
 	}
 }
 
@@ -126,13 +131,35 @@ void mmx_using_intrinsics3(void) {
 	}
 }
 
+typedef float v4sf __attribute__ ((vector_size (16)));
+
+void sse_using_intrinsics1(void) {
+	v4sf a = {(float)randint(),(float)randint(),(float)randint(),(float)randint()};
+	v4sf b = {1.0,-1.0,(float)randint()/(float)randint(),(float)randint()/(float)randint()};
+	for (int i=0; i<4; i++) {
+		printf("a[%i]:%f\tb[%i]:%f\n", i, a[i], i, b[i]);
+	}
+	printf("a = a / b;\n");
+	a = a / b;
+	for (int i=0; i<4; i++) {
+		printf("a[%i]:%f\tb[%i]:%f\n", i, a[i], i, b[i]);
+	}
+	printf("f = rcpps(b);\nr = a * f;\n");
+	v4sf f = __builtin_ia32_rcpps(b); //or v4sf f = 1. / b; gcc-5-doc: "These instructions are generated only when -funsafe-math-optimizations is enabled together with -finite-math-only and -fno-trapping-math."
+	v4sf r = a * f;
+	for (int i=0; i<4; i++) {
+		printf("f[%i]:%f\tr[%i]:%f\n", i, f[i], i, r[i]);
+	}
+}
+
 int main(void) {
 
 	//mmx_using_asm();
 	//sse_using_asm();
-	mmx_using_intrinsics1();
+	//mmx_using_intrinsics1();
 	//mmx_using_intrinsics2();
 	//mmx_using_intrinsics3();
+	sse_using_intrinsics1();
 	
 	return 0;
 }
