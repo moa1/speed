@@ -68,9 +68,9 @@ void sse_using_asm(void) {
 	}
 }
 
-typedef int v4si __attribute__((vector_size(16)));
+typedef int32_t v4si __attribute__((vector_size(16)));
 
-typedef short int v4ssi __attribute__ ((vector_size (8)));
+typedef int16_t v4ssi __attribute__ ((vector_size (8)));
 
 void mmx_using_intrinsics1(void) {
 	v4ssi a = {randint(),randint(),randint(),randint()};
@@ -152,6 +152,45 @@ void sse_using_intrinsics1(void) {
 	}
 }
 
+void inline sse_argument_passing_helper1(v4si* a, const v4si b) {
+	(*a) -= b;
+}
+
+void sse_argument_passing() {
+	v4si a = {randint()>>16,randint()>>16,randint()>>16,randint()>>16};
+	for (int i=0; i<4; i++) {
+		printf("a[%i]:%i\n", i, a[i]);
+	}
+	sse_argument_passing_helper1(&a, (v4si){5,-6,7,-8});
+	a += (v4si){1,-1,2,-2};
+//	sse_argument_passing_helper1(&a);
+//	sse_argument_passing_helper1(&a);
+//	sse_argument_passing_helper1(&a);
+	for (int i=0; i<4; i++) {
+		printf("a[%i]:%i\n", i, a[i]);
+	}
+}
+
+void sse_vector_array() {
+	v4si a[2];
+	a[0] = (v4si){randint()>>16,randint()>>16,randint()>>16,randint()>>16};
+	a[1] = (v4si){randint()>>16,randint()>>16,randint()>>16,randint()>>16};
+	for (int j=0; j<2; j++) {
+		for (int i=0; i<4; i++) {
+			printf("a[%i][%i]:%i\n", j, i, a[j][i]);
+		}
+	}
+	sse_argument_passing_helper1(&a[0], (v4si){1,-2,3,-4});
+	sse_argument_passing_helper1(&a[1], (v4si){5,-6,7,-8});
+	a[0] += (v4si){1,-1,2,-2};
+	a[1] += (v4si){3,-3,4,-4};
+	for (int j=0; j<2; j++) {
+		for (int i=0; i<4; i++) {
+			printf("a[%i][%i]:%i\n", j, i, a[j][i]);
+		}
+	}
+}
+
 int main(void) {
 
 	//mmx_using_asm();
@@ -159,7 +198,9 @@ int main(void) {
 	//mmx_using_intrinsics1();
 	//mmx_using_intrinsics2();
 	//mmx_using_intrinsics3();
-	sse_using_intrinsics1();
+	//sse_using_intrinsics1();
+	//sse_argument_passing();
+	sse_vector_array();
 	
 	return 0;
 }
