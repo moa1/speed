@@ -380,6 +380,7 @@ typedef struct {
 	v4si offset_mask;
 } hm_info;
 
+// (noinline) to simulate this function being in another file and have the overhead of calling a function.
 const v4si __attribute__((noinline)) get_hm_height(const v4si x, const v4si y, void* arg) {
 	hm_info* hm_info = arg;
 	int32_t* hm = hm_info->hm;
