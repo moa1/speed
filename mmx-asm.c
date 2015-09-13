@@ -158,21 +158,23 @@ void inline sse_argument_passing_helper1(v4si* a, const v4si b) {
 
 void sse_argument_passing() {
 	v4si a = {randint()>>16,randint()>>16,randint()>>16,randint()>>16};
+	v4si b = {randint()>>16,randint()>>16,randint()>>16,randint()>>16};
 	for (int i=0; i<4; i++) {
-		printf("a[%i]:%i\n", i, a[i]);
+		printf("a[%i]:%i b[%i]:%i\n", i, a[i], i, b[i]);
 	}
-	sse_argument_passing_helper1(&a, (v4si){5,-6,7,-8});
+	sse_argument_passing_helper1(&a, b);
 	a += (v4si){1,-1,2,-2};
 //	sse_argument_passing_helper1(&a);
 //	sse_argument_passing_helper1(&a);
 //	sse_argument_passing_helper1(&a);
 	for (int i=0; i<4; i++) {
-		printf("a[%i]:%i\n", i, a[i]);
+		printf("a[%i]:%i b[%i]:%i\n", i, a[i], i, b[i]);
 	}
 }
 
 void sse_vector_array() {
 	v4si a[2];
+	v4si b[2];
 	a[0] = (v4si){randint()>>16,randint()>>16,randint()>>16,randint()>>16};
 	a[1] = (v4si){randint()>>16,randint()>>16,randint()>>16,randint()>>16};
 	for (int j=0; j<2; j++) {
@@ -199,8 +201,8 @@ int main(void) {
 	//mmx_using_intrinsics2();
 	//mmx_using_intrinsics3();
 	//sse_using_intrinsics1();
-	//sse_argument_passing();
-	sse_vector_array();
+	sse_argument_passing();
+	//sse_vector_array();
 	
 	return 0;
 }
