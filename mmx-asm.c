@@ -193,6 +193,27 @@ void sse_vector_array() {
 	}
 }
 
+void sse_convert_int_float() {
+	v4si a = {randint()>>16,randint()>>16,randint()>>16,randint()>>16};
+	v4sf b;
+
+	printf("converting by hand\n");
+	b[0] = (float)a[0];
+	b[1] = (float)a[1];
+	b[2] = (float)a[2];
+	b[3] = (float)a[3];
+	for (int i=0; i<4; i++) {
+		printf("a[%i]:%i b[%i]:%f\n", i, a[i], i, b[i]);
+	}
+
+	printf("converting using __builtin_ia32_cvtdq2ps\n");
+	b = __builtin_ia32_cvtdq2ps(a);
+	for (int i=0; i<4; i++) {
+		printf("a[%i]:%i b[%i]:%f\n", i, a[i], i, b[i]);
+	}
+
+}
+
 int main(void) {
 
 	//mmx_using_asm();
@@ -201,8 +222,9 @@ int main(void) {
 	//mmx_using_intrinsics2();
 	//mmx_using_intrinsics3();
 	//sse_using_intrinsics1();
-	sse_argument_passing();
+	//sse_argument_passing();
 	//sse_vector_array();
+	sse_convert_int_float();
 	
 	return 0;
 }
