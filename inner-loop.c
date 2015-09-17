@@ -78,44 +78,42 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 	int16_t todo = 0;
 	v4si ign;
 
-#if NEXT_TODO==NEXT_TODO_LOCAL
-	void inline next_todo(int i) {
-		index[i] = todo;
-		ign[i] = 0;
-		hraynx[i] = hrayn[todo].x;
-		hrayny[i] = hrayn[todo].y;
-		hraynz[i] = hrayn[todo].z;
-		hp1x[i] = hpstart[todo].x;
-		hp1y[i] = hpstart[todo].y;
-		hp1z[i] = hpstart[todo].z;
-		todo++;
-	}
-	void inline store_result(const int done, const int i) {
-		hp0[done].x = hp1x[i] - hraynx[i];
-		hp0[done].y = hp1y[i] - hrayny[i];
-		hp0[done].z = hp1z[i] - hraynz[i];
-		hp1[done].x = hp1x[i];
-		hp1[done].y = hp1y[i];
-		hp1[done].z = hp1z[i];
-	}
-#elif NEXT_TODO==NEXT_TODO_MACRO
-#define next_todo(i)							\
+	const int32_t hwmax_i=(hw<<16)-1;
+	v4si hwmax = {hwmax_i,hwmax_i,hwmax_i,hwmax_i};
+	const int32_t hhmax_i=(hh<<16)-1;
+	v4si hhmax = {hhmax_i,hhmax_i,hhmax_i,hhmax_i};
+	const int32_t hdmax_i=hd-1;
+	v4si hdmax = {hdmax_i,hdmax_i,hdmax_i,hdmax_i};
+
+#define next_todo_macro(i)						\
 	index[i] = todo;							\
 	ign[i] = 0;									\
 	hraynx[i] = hrayn[todo].x;					\
 	hrayny[i] = hrayn[todo].y;					\
 	hraynz[i] = hrayn[todo].z;					\
+	assert(0 <= hpstart[todo].x && hpstart[todo].x <= hwmax_i && 0 <= hpstart[todo].y && hpstart[todo].y <= hhmax_i && 0 <= hpstart[todo].z && hpstart[todo].z <= hdmax_i);	\
 	hp1x[i] = hpstart[todo].x;					\
 	hp1y[i] = hpstart[todo].y;					\
 	hp1z[i] = hpstart[todo].z;					\
 	todo++;
-#define store_result(done,i)					\
+#define store_result_macro(done,i)				\
 	hp0[done].x = hp1x[i] - hraynx[i];			\
 	hp0[done].y = hp1y[i] - hrayny[i];			\
 	hp0[done].z = hp1z[i] - hraynz[i];			\
 	hp1[done].x = hp1x[i];						\
 	hp1[done].y = hp1y[i];						\
 	hp1[done].z = hp1z[i];
+
+#if NEXT_TODO==NEXT_TODO_LOCAL
+	void inline next_todo(int i) {
+		next_todo_macro(i)
+	}
+	void inline store_result(const int done, const int i) {
+		store_result_macro(done, i)
+	}
+#elif NEXT_TODO==NEXT_TODO_MACRO
+#define next_todo(i) next_todo_macro(i)
+#define store_result(done,i) store_result_macro(done,i)
 #else
 #error "unknown NEXT_TODO"
 #endif
@@ -123,12 +121,6 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 	for (int i=0;i<4;i++) {
 		next_todo(i); // no bounds check necessary because hpstart,hrayn have space for n+4 items.
 	}
-	const int32_t hwmax_i=(hw<<16)-1;
-	v4si hwmax = {hwmax_i,hwmax_i,hwmax_i,hwmax_i};
-	const int32_t hhmax_i=(hh<<16)-1;
-	v4si hhmax = {hhmax_i,hhmax_i,hhmax_i,hhmax_i};
-	const int32_t hdmax_i=hd-1;
-	v4si hdmax = {hdmax_i,hdmax_i,hdmax_i,hdmax_i};
 #if HM_METHOD==HM_ARRAY
 	const int32_t stride_shift_i=hw_log2;
 	const v4si stride_shift={hw_log2,hw_log2,hw_log2,hw_log2};
@@ -467,7 +459,9 @@ int main(int argc, char** argv) {
 	int steps = 0;
 	for (int scan=0;scan<scan_line_loop;scan++) {
 		clock_t scan_line_start = clock();
-		scan_line(n, hpstart, hrayn, (int)log2(hw>>16), (int)log2(hh>>16), hd, get_hm_height, hm_function_arg, hp0, hp1, -1,-1);
+		const int debug_min = -1;
+		const int debug_max = -1;
+		scan_line(n, hpstart, hrayn, (int)log2(hw>>16), (int)log2(hh>>16), hd, get_hm_height, hm_function_arg, hp0, hp1, debug_min, debug_max);
 		__asm__("emms\n");
 		clock_t scan_line_stop = clock();
 		clock_t diff = scan_line_stop - scan_line_start;
