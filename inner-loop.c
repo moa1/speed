@@ -66,6 +66,8 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 	  3. Return when all pixels have ign==1
 	 */
 
+	assert(n < ((1<<15)-1-4)); //avoid overflow of todo which could result in an infinite loop.
+
 	const int32_t hw = 1 << hw_log2;
 	const int32_t hh = 1 << hh_log2;
 
@@ -411,7 +413,7 @@ int main(int argc, char** argv) {
 	const v4si offset_mask={offset_mask_i,offset_mask_i,offset_mask_i,offset_mask_i};
 	hm_info hm_info = {hm, stride_shift, offset_mask};
 
-	int n=20000;
+	const int n=20000;
 	v3 *hpstart = malloc(sizeof(v3) * (n+4));
 	v3 *hrayn = malloc(sizeof(v3) * (n+4));
 	if (hpstart==NULL || hrayn==NULL) {
