@@ -2,7 +2,7 @@
 CFLAGS ?= -O3 -march=native
 
 clean:
-	rm -f *.o vec mmx-asm inner-loop rcpps
+	rm -f *.o vec mmx-asm inner-loop rcpps sigmoid-speed
 
 branch-prediction:
 	$(CC) --std=c99 -o branch-prediction branch-prediction.c
@@ -18,4 +18,7 @@ inner-loop: inner-loop.c
 
 rcpps: rcpps.c
 	$(CC) -g --std=c99 ${CFLAGS} -lm -o rcpps rcpps.c
+
+sigmoid-speed: sigmoid-speed.c
+	$(CC) -g --std=c99 -O2 -lm -o sigmoid-speed sigmoid-speed.c
 
