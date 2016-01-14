@@ -3,6 +3,7 @@
 #include <math.h>
 #include <time.h>
 
+//This function can be sped up (and made inaccurate) by compiling with "-ffast-math".
 float sigmoid(float x) {
 	return 1.0/(1+exp(-x));
 }
