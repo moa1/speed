@@ -141,6 +141,45 @@ int and(int argc, char** argv) {
 	return 0;
 }
 
+int or(int argc, char** argv) {
+	if (argc < 3) {
+		fprintf(stderr, "or NUMBER1 NUMBER2\nPrint the logical or NUMBER1&NUMBER2 where NUMBER1 and NUMBER2 are in 8, 16, and 32 bits.\n");
+		return 1;
+	}
+	printf("or\n");
+	{
+		int8_t as = strtol(argv[1], NULL, 10);
+		int8_t bs = strtol(argv[2], NULL, 10);
+		int8_t cs = as|bs;
+		printf("as:% 4"PRIi8"(%s) bs:% 4"PRIi8"(%s) cs:% 4"PRIi8"(%s)\n",as,bin(as,8),bs,bin(bs,8),cs,bin(cs,8));
+		uint8_t au = strtoul(argv[1], NULL, 10);
+		uint8_t bu = strtoul(argv[2], NULL, 10);
+		uint8_t cu = au|bu;
+		printf("au:% 4"PRIu8"(%s) bu:% 4"PRIu8"(%s) cu:% 4"PRIu8"(%s)\n",au,bin(au,8),bu,bin(bu,8),cu,bin(cu,8));
+	}
+	{ 
+		int16_t as = strtol(argv[1], NULL, 10);
+		int16_t bs = strtol(argv[2], NULL, 10);
+		int16_t cs = as|bs;
+		printf("as:% 6"PRIi16"(%s) bs:% 6"PRIi16"(%s) cs:% 6"PRIi16"(%s)\n",as,bin(as,16),bs,bin(bs,16),cs,bin(cs,16));
+		uint16_t au = strtoul(argv[1], NULL, 10);
+		uint16_t bu = strtoul(argv[2], NULL, 10);
+		uint16_t cu = as|bs;
+		printf("au:% 6"PRIu16"(%s) bu:% 6"PRIu16"(%s) cu:% 6"PRIu16"(%s)\n",au,bin(au,16),bu,bin(bu,16),cu,bin(cu,16));
+	}
+	{
+		int32_t as = strtol(argv[1], NULL, 10);
+		int32_t bs = strtol(argv[2], NULL, 10);
+		int32_t cs = as|bs;
+		printf("as:% 11"PRIi32"(%s) bs:% 11"PRIi32"(%s) cs:% 11"PRIi32"(%s)\n",as,bin(as,32),bs,bin(bs,32),cs,bin(cs,32));
+		uint32_t au = strtoul(argv[1], NULL, 10);
+		uint32_t bu = strtol(argv[2], NULL, 10);
+		uint32_t cu = as|bs;
+		printf("au:% 11"PRIu32"(%s) bu:% 11"PRIu32"(%s) cu:% 11"PRIu32"(%s)\n",au,bin(au,32),bu,bin(bu,32),cu,bin(cu,32));
+	}
+
+	return 0;
+}
 
 int match(char* argv0, char* name) {
 	char* l = strrchr(argv0,'/')+1;
@@ -156,6 +195,8 @@ int main(int argc, char** argv) {
 		return shift(argc,argv);
 	} else if (match(argv[0], "and")) {
 		return and(argc,argv);
+	} else if (match(argv[0], "or")) {
+		return or(argc,argv);
 	} else {
 		fprintf(stderr, "unknown command %s.\n", argv[0]);
 		return 127;
