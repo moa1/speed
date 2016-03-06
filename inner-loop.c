@@ -245,6 +245,22 @@ void scan_line(const int n, const v3* hpstart, const v3* hrayn, const int hw_log
 		int igns = ((ign[3] & 1) << 3) | ((ign[2] & 1) << 2) | ((ign[1] & 1) << 1) | (ign[0] & 1);
 		int done;
 		switch(igns) {
+/*
+#!/usr/bin/python
+
+s_case = """			case %i: // %i == %s"""
+s_job = """				store_result(index[%i], %i);
+				next_todo(%i);"""
+s_break = """				break;"""
+
+for i in range(16):
+	bi = bin(i)
+	print s_case % (i,i,bi)
+	for j in range(4):
+		if (i & (1<<j)) != 0:
+			print s_job % (j,j,j)
+	print s_break
+*/
 			case 0: // 0 == 0b0
 				break;
 			case 1: // 1 == 0b1
