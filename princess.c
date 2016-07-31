@@ -13,6 +13,10 @@
 one card is put aside. each of the 4 players gets one card. then, for each player: the player draws a second card, and plays one of them. this continues until only one player remains, or no cards are left to draw. in the latter case the player with the highest card gets a heart, and must shuffle next round (so that the player next in clockwise order is the next first player). the first player to get 3 hearts wins.
 */
 
+/* there are (/ (fak 16) (fak 5) (fak 2) (fak 2) (fak 2) (fak 2)) == 10897286400 (i.e. 11 * 10**9) different possible stack sortings.
+if each card had a target and guess, there would be (2*4*16)**16 == 5192296858534827628530496329220096 == 5.192297e33 different games for each stack. */
+
+#define _DEFAULT_SOURCE //for random()
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,15 +66,17 @@ const char* card2str(card_t card) {
 }
 
 card_t standardize_card(card_t card) {
-	switch(card) {
-		case watchwoman1: case watchwoman2: case watchwoman3: case watchwoman4: case watchwoman5: return watchwoman1;
-		case priest1: case priest2: return priest1;
-		case baron1: case baron2: return baron1;
-		case abigail1: case abigail2: return abigail1;
-		case prince1: case prince2: return prince1;
-		case king: case duchess: case princess: return card;
-		default: fprintf(stderr, "invalid card:%i\n",card); assert(0); //invalid card
-	}
+	card_t card2stdcard[16] = {
+		watchwoman1,watchwoman1,watchwoman1,watchwoman1,watchwoman1,
+		priest1, priest1,
+		baron1, baron1,
+		abigail1, abigail1,
+		prince1, prince1,
+		king,
+		duchess,
+		princess,
+	};
+	return card2stdcard[card];
 }
 
 typedef struct game {
@@ -78,8 +84,8 @@ typedef struct game {
 	int num_stack; //number of cards on the stack
 	int num_dump; //number of cards on the dump
 	card_t players[4]; //each player has one card
-	uint8_t lost; //a set bit's index names the player that has lost
-	uint8_t protected; //a set bit's index names the protected player
+	int lost; //a set bit's index names the player that has lost
+	int protected; //a set bit's index names the protected player
 	// the following do not have to be backed up in enumerate_tries
 	card_t stack[16]; //the stack of cards, stack[0] is the last card
 	int num_players; //number of total players (including those that lost)
@@ -116,22 +122,25 @@ card_t push_dump(game_t *game, card_t card) {
 	game->num_dump++;
 }
 
-int player_lost(game_t *game, int player) {
+inline int player_lost(game_t *game, int player) {
 	return (game->lost >> player) & 1;
 }
 
-void set_player_lost(game_t *game, int player) {
+inline void set_player_lost(game_t *game, int player) {
 	push_dump(game, game->players[player]);
 	game->lost |= 1<<player;
 }
 
-int player_protected(game_t *game, int player) {
+inline int player_protected(game_t *game, int player) {
 	return (game->protected >> player) & 1;
 }
 
-void set_player_protected(game_t *game, int player, int protected) {
-	assert(protected==0 || protected==1);
-	game->protected |= protected<<player;
+inline void set_player_protected(game_t *game, int player) {
+	game->protected |= 1<<player;
+}
+
+inline void unset_player_protected(game_t *game, int player) {
+	game->protected &= ~(1<<player);
 }
 
 void print_game(game_t *game) {
@@ -159,9 +168,9 @@ void print_game(game_t *game) {
 }
 
 /*returns the card of the target, or -1 if the game continues, or -2 if the game is over.*/
-int play(game_t* game, uint8_t player, card_t card, uint8_t target, card_t guess) {
+inline int play(game_t* game, uint8_t player, card_t card, uint8_t target, card_t guess) {
 	assert(!player_lost(game, target));
-	set_player_protected(game, player, 0);
+	unset_player_protected(game, player); //TODO: FIXME: move this to the end of this function, and execute it in the turn before PLAYER takes turn. The reason is that when electing players as possible targets, oneself (i.e. PLAYER) is not considered, because the un-setting of the protection bit here is done after electing.
 	assert(!player_protected(game, target));
 	push_dump(game, card);
 	int ret=-1;
@@ -187,7 +196,7 @@ int play(game_t* game, uint8_t player, card_t card, uint8_t target, card_t guess
 		}
 		break;
 		case abigail1: case abigail2:
-			set_player_protected(game, player, 1);
+			set_player_protected(game, player);
 			break;
 		case prince1: case prince2:
 		{
@@ -266,17 +275,21 @@ void print_winners(game_t* game) {
 	printf("\n");
 }
 
-uint16_t unset_bit_uint16(uint16_t bits, int i) {
+inline uint16_t unset_bit(uint16_t bits, int i) {
 	bits &= ~(1<<i);
 	return bits;
 }
+
+int calls = 0;
 
 void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 	card_t card1 = game->players[player];
 	card_t card2 = pop_stack(game);
 
+	unset_player_protected(game, player); //unset player protection, so that we can select ourself in this turn, if we had been protected.
+
 	game_t backup;
-	void backup_game(game_t* game) {
+	inline void backup_game(game_t* game) {
 		backup.num_stack = game->num_stack;
 		backup.num_dump = game->num_dump;
 		backup.players[0] = game->players[0];
@@ -286,7 +299,7 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 		backup.lost = game->lost;
 		backup.protected = game->protected;
 	}
-	void restore_game(game_t* game) {
+	inline void restore_game(game_t* game) {
 		game->num_stack = backup.num_stack;
 		game->num_dump = backup.num_dump;
 		game->players[0] = backup.players[0];
@@ -296,7 +309,7 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 		game->lost = backup.lost;
 		game->protected = backup.protected;
 	}
-
+//	copy_game_to_game(&backup, game);
 	backup_game(game);
 	
 /*	printf("------- TURN:%i -------\n", turn);
@@ -312,11 +325,11 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 		}
 	}
 	// compute possible guesses
-	uint16_t guesses = (uint16_t)-1;//(1<<watchwoman1) | (1<<priest1) | (1<<baron1) | (1<<abigail1) | (1<<prince1) | (1<<king) | (1<<duchess) | (1<<princess);
-	guesses = unset_bit_uint16(guesses, card1);
-	guesses = unset_bit_uint16(guesses, card2);
+	uint16_t guesses = (uint16_t)-1;
+	guesses = unset_bit(guesses, card1);
+	guesses = unset_bit(guesses, card2);
 	for (int i=0; i<game->num_dump; i++) {
-		guesses = unset_bit_uint16(guesses, game->dump[i]);
+		guesses = unset_bit(guesses, game->dump[i]);
 	}
 	{
 		int last_guess=-1;
@@ -325,7 +338,7 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 				if (last_guess == -1) {
 					last_guess = standardize_card(i);
 				} else if (last_guess == standardize_card(i)) {
-					guesses = unset_bit_uint16(guesses, i);
+					guesses = unset_bit(guesses, i);
 				} else { //last_guess != standardize_card(i)
 					last_guess = standardize_card(i);
 				}
@@ -343,7 +356,10 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 */
 	
 	void play_trie2(game_t *game, int player, card_t card, int target, card_t guess) { 
-//		printf("PLAYER:%i CARD1:%s CARD2:%s CARD:%s TARGET:%i GUESS:%s\n", player, card2str(card1), card2str(card2), card2str(card), target, (guess>=0 && guess<=15)?card2str(guess):"none");
+//		if ((calls%1000)==0) fprintf(stderr, "calls:%i\n",calls);
+		calls++;
+		
+//		printf("PLAYER: %i CARD1: %s CARD2: %s CARD: %s TARGET: %i GUESS: %s\n", player, card2str(card1), card2str(card2), card2str(card), target, (guess>=0 && guess<=15)?card2str(guess):"none");
 
 		tries[turn].player = player;
 		tries[turn].card = card;
@@ -351,11 +367,14 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 		tries[turn].guess = guess;
 		play(game, player, card, target, guess);
 		if (game_over_p(game)) {
-/*			printf("----- turn:%i ", turn); print_winners(game);
+/*			
+			printf("winner ");
+			//print_winners(game);
 			for (int i=0; i<turn+1; i++) {
 				card_t guess = tries[i].guess;
-				printf("player:%i card:%s target:%i guess:%s\n",tries[i].player,card2str(tries[i].card),tries[i].target,(guess>=0 && guess<=15)?card2str(guess):"none");
+				printf("turn:%i player:%i card:%s target:%i guess:%s, ",i,tries[i].player,card2str(tries[i].card),tries[i].target,(guess>=0 && guess<=15)?card2str(guess):"none");
 			}
+			printf("\n");
 */
 		} else {
 			int next_player = player;
@@ -366,6 +385,7 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 			}
 			enumerate_tries(game, next_player, turn+1, tries);
 		}
+//		copy_game_to_game(game, &backup);
 		restore_game(game); //restore game at beginning of this turn
 /*		printf("--- BACKTRACK TURN:%i ---\n", turn);
 		print_game(game);
@@ -377,7 +397,7 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 		switch(card) {
 			case watchwoman1: case watchwoman2: case watchwoman3: case watchwoman4: case watchwoman5:
 				for (int i_target=0; i_target<num_targets; i_target++) {
-					for (card_t i_guess=0; i_guess<16; i_guess++) {
+					for (card_t i_guess=5; i_guess<16; i_guess++) { //don't guess watchwoman: start at 5
 						if ((guesses & (1<<i_guess)) != 0) {
 							play_trie2(game, player, card, targets[i_target], i_guess);
 						}
@@ -416,17 +436,21 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 	}
 
 	// check if player is forced to play a card
-	if (card1 != duchess && card2 != duchess) {
+	if (standardize_card(card1) == standardize_card(card2)) {
+		play_trie(card1, card2); // only need one trie since card1 == card2
+	} else if ((card1 != duchess && card2 != duchess) && (card1 != princess && card2 != princess)) {
 		play_trie(card1, card2);
 		play_trie(card2, card1);
-	} else {
-		if (card2 == duchess) {
+	} else { // one of the cards is duchess or princess
+		if (card2 == duchess || card2 == princess) {
 			card_t temp = card1;
 			card1 = card2;
 			card2 = temp;
 		}
 		if (card1 == duchess && (card2 == king || standardize_card(card2) == prince1)) {
 			play_trie(card1, card2);
+		} else if (card1 == princess) {
+			play_trie(card2, card1);
 		} else {
 			play_trie(card1, card2);
 			play_trie(card2, card1);
@@ -434,22 +458,50 @@ void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
 	}
 }
 
-int main(void) {
-	game_t game_s;
-	game_t *game = &game_s;
-
+void init_first_game(game_t* game, int num_players) {
 	game->num_stack = 16;
 	for (int i=0; i<16; i++) {
 		game->stack[i] = i;
 	}
-	game->num_players = 4;
+	game->num_players = num_players;
 	for (int i=0; i<game->num_players; i++) {
 		game->players[i] = pop_stack(game);
 	}
 	game->lost = 0;
 	game->protected = 0;
 	game->num_dump = 0;
+}
 
+void init_random_game(game_t* game, int num_players, int num_stack) {
+	game->num_stack = num_stack;
+	for (int i=0; i<game->num_stack; i++) {
+		game->stack[i] = 15-i;
+	}
+	// shuffle stack
+	for (int i=game->num_stack-1; i>=1; i--) {
+		int r=random()%i;
+		card_t temp = game->stack[i];
+		game->stack[i] = game->stack[r];
+		game->stack[r] = temp;
+	}
+	game->num_players = num_players;
+	for (int i=0; i<game->num_players; i++) {
+		game->players[i] = pop_stack(game);
+	}
+	game->lost = 0;
+	game->protected = 0;
+	game->num_dump = 0;
+}
+
+int main(int argc, char** argv) {
+	game_t game_s;
+	game_t *game = &game_s;
+
+	init_random_game(game, 4, atoi(argv[1]));
+	print_game(game);
+	
 	trie_t tries[16];
 	enumerate_tries(game, 0, 0, tries);
+
+	fprintf(stderr, "calls:%i\n", calls);
 }
