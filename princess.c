@@ -74,13 +74,15 @@ card_t standardize_card(card_t card) {
 }
 
 typedef struct game {
+	// the following must be backed up in enumerate_tries
 	int num_stack; //number of cards on the stack
-	card_t stack[16]; //the stack of cards, stack[0] is the last card
-	int num_players; //number of total players (including those that lost)
+	int num_dump; //number of cards on the dump
 	card_t players[4]; //each player has one card
 	uint8_t lost; //a set bit's index names the player that has lost
 	uint8_t protected; //a set bit's index names the protected player
-	int num_dump;
+	// the following do not have to be backed up in enumerate_tries
+	card_t stack[16]; //the stack of cards, stack[0] is the last card
+	int num_players; //number of total players (including those that lost)
 	card_t dump[16]; //the stack of played cards, dump[num_dump-1] is most recent
 } game_t;
 
@@ -269,14 +271,34 @@ uint16_t unset_bit_uint16(uint16_t bits, int i) {
 	return bits;
 }
 
-void enumerate_tries(game_t* backup_game, int player, int turn, trie_t* tries) {
-	card_t card1 = backup_game->players[player];
-	card_t card2 = pop_stack(backup_game);
+void enumerate_tries(game_t* game, int player, int turn, trie_t* tries) {
+	card_t card1 = game->players[player];
+	card_t card2 = pop_stack(game);
 
-	game_t game_s;
-	game_t *game = &game_s;
-	copy_game_to_game(game, backup_game);
+	game_t backup;
+	void backup_game(game_t* game) {
+		backup.num_stack = game->num_stack;
+		backup.num_dump = game->num_dump;
+		backup.players[0] = game->players[0];
+		backup.players[1] = game->players[1];
+		backup.players[2] = game->players[2];
+		backup.players[3] = game->players[3];
+		backup.lost = game->lost;
+		backup.protected = game->protected;
+	}
+	void restore_game(game_t* game) {
+		game->num_stack = backup.num_stack;
+		game->num_dump = backup.num_dump;
+		game->players[0] = backup.players[0];
+		game->players[1] = backup.players[1];
+		game->players[2] = backup.players[2];
+		game->players[3] = backup.players[3];
+		game->lost = backup.lost;
+		game->protected = backup.protected;
+	}
 
+	backup_game(game);
+	
 /*	printf("------- TURN:%i -------\n", turn);
 	print_game(game);
 */	
@@ -344,7 +366,7 @@ void enumerate_tries(game_t* backup_game, int player, int turn, trie_t* tries) {
 			}
 			enumerate_tries(game, next_player, turn+1, tries);
 		}
-		copy_game_to_game(game, backup_game); //restore game at beginning of this turn
+		restore_game(game); //restore game at beginning of this turn
 /*		printf("--- BACKTRACK TURN:%i ---\n", turn);
 		print_game(game);
 */
