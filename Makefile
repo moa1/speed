@@ -4,7 +4,7 @@ CFLAGS ?= -O3 -march=native
 all: branch-prediction vec mmx-asm inner-loop rcpps sigmoid-speed princess inline
 
 clean:
-	rm -f *.o vec mmx-asm inner-loop rcpps sigmoid-speed princess inline
+	rm -f *.o branch-prediction vec mmx-asm inner-loop rcpps sigmoid-speed princess inline
 
 branch-prediction:
 	$(CC) --std=c99 -o branch-prediction branch-prediction.c
