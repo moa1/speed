@@ -1,10 +1,10 @@
 # the shitty make doesn't allow me to specify a default CC: CC ?= gcc and running make executes "cc" instead of "gcc".
 CFLAGS ?= -O3 -march=native
 
-all: branch-prediction vec mmx-asm inner-loop rcpps sigmoid-speed princess inline
+all: branch-prediction vec mmx-asm inner-loop rcpps sigmoid-speed princess inline cache
 
 clean:
-	rm -f *.o branch-prediction vec mmx-asm inner-loop rcpps sigmoid-speed princess inline
+	rm -f *.o branch-prediction vec mmx-asm inner-loop rcpps sigmoid-speed princess inline cache
 
 branch-prediction:
 	$(CC) --std=c99 -o branch-prediction branch-prediction.c
@@ -29,3 +29,6 @@ princess: princess.c
 
 inline: inline.c
 	$(CC) -g --std=c99 -lm -O3 -o inline inline.c
+
+cache: cache.c
+	$(CC) -g --std=c99 -O3 -o cache cache.c
