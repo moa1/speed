@@ -181,6 +181,28 @@ int or(int argc, char** argv) {
 	return 0;
 }
 
+int floating(int argc, char** argv) {
+	if (argc < 2) {
+		fprintf(stderr, "float NUMBER\nPrint the floating-point NUMBER in 32 and 64 bits.\n");
+		return 1;
+	}
+	printf("float\n");
+	{
+		float af;
+		sscanf(argv[1],"%f",&af);
+		uint32_t au = *((uint32_t*)&af);
+		printf("af:% 14.8e(%s)\n",af,bin(au,32));
+	}
+	{
+		double ad;
+		sscanf(argv[1],"%lf",&ad);
+		uint64_t au = *((uint64_t*)&ad);
+		printf("ad:% 14.8e(%s)\n",ad,bin(au,64));
+	}
+
+	return 0;
+}
+
 int match(char* argv0, char* name) {
 	char* l = strrchr(argv0,'/')+1;
 	if (l == NULL)
@@ -197,6 +219,8 @@ int main(int argc, char** argv) {
 		return and(argc,argv);
 	} else if (match(argv[0], "or")) {
 		return or(argc,argv);
+	} else if (match(argv[0], "float")) {
+		return floating(argc,argv);
 	} else {
 		fprintf(stderr, "unknown command %s.\n", argv[0]);
 		return 127;

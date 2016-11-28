@@ -6,6 +6,7 @@ mult: mult.c
 	ln -fs mult shift
 	ln -fs mult and
 	ln -fs mult or
+	ln -fs mult float
 
 clean:
-	rm -f mult mult.s shift and or
+	rm -f mult mult.s shift and or float
